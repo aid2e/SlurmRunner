@@ -19,31 +19,31 @@ parser.add_argument("-wr", "--write_run", help="Write and run a SLURM job.", def
 args = parser.parse_args()
 print(args.script_path)
 
-def run_multiple_jobs(script_path=args.script_path, num_of_jobs=int(args.jobs), custom_output_dir=args.output_dir, refresh_job_list=int(args.refresh), show_status=args.status):
+try:
+    with open(os.path.abspath(args.script_path), "rt") as slurm_file:
+        lines = slurm_file.readlines()
+        for line in lines:
+            if "#SBATCH --job-name=" in line:
+                job_name = line[ line.rfind('/') +1 : line.rfind('#') ].strip()
+            elif "#SBATCH --output=" in line:
+                output_file = line[ line.find('=') +1 : line.rfind('#') ].strip()
+            elif "#SBATCH --error=" in line:
+                error_file = line[ line.find('=') +1 : line.rfind('#') ].strip()
+except TypeError:
+    print(f"File with path {os.path.abspath(args.script_path)} not found!")
+    exit()
 
-    try:
-        with open(os.path.abspath(script_path), "rt") as slurm_file:
-            lines = slurm_file.readlines()
-            for line in lines:
-                if "#SBATCH --job-name=" in line:
-                    job_name = line[ line.rfind('/') +1 : line.rfind('#') ].strip()
-                elif "#SBATCH --output=" in line:
-                    output_file = line[ line.find('=') +1 : line.rfind('#') ].strip()
-                elif "#SBATCH --error=" in line:
-                    error_file = line[ line.find('=') +1 : line.rfind('#') ].strip()
-    except TypeError:
-        print(f"File with path {os.path.abspath(script_path)} not found!")
-        exit()
+print("Output directory set to:", os.path.abspath(args.output_dir))
+os.makedirs(os.path.abspath(args.output_dir),exist_ok=True)
+print(f"Output file: {os.path.abspath(args.output_dir)}/{output_file}\n")
 
-    print("Output directory set to:", os.path.abspath(custom_output_dir))
-    os.makedirs(os.path.abspath(custom_output_dir),exist_ok=True)
-    print(f"Output file: {os.path.abspath(custom_output_dir)}/{output_file}\n")
+def run_multiple_jobs(num_of_jobs=int(args.jobs), show_status=args.status):
 
     time.sleep(2)
     job_id_list = []
     cwd = os.getcwd()
     for job in range(num_of_jobs):
-        path = os.path.abspath(custom_output_dir) + "/ITER_" + str(job)
+        path = os.path.abspath(args.output_dir) + "/ITER_" + str(job)
         print("Creating path:", path)
         os.makedirs(path, exist_ok=True)
         os.chdir(path)
@@ -61,9 +61,9 @@ def run_multiple_jobs(script_path=args.script_path, num_of_jobs=int(args.jobs), 
             try:
                 check_output = subprocess.check_output(f"squeue --job {','.join(map(str, job_id_list)) } | grep $USER", shell=True, universal_newlines=True)
                 if check_output is not None:
-                    print(f"Jobs are running (refresh: {refresh_job_list} sec intervals):")
+                    print(f"Jobs are running (refresh: {args.refresh} sec intervals):")
                     print(check_output)
-                    time.sleep(refresh_job_list)
+                    time.sleep(int(args.refresh))
                 else:
                     break
             except subprocess.CalledProcessError:
@@ -77,32 +77,14 @@ def run_multiple_jobs(script_path=args.script_path, num_of_jobs=int(args.jobs), 
         print(f"===OUTPUT OF JOBS===\n")
         print("Output is available under these directories:")
         for job in range(num_of_jobs):
-            print(os.path.abspath(custom_output_dir) + "/ITER_" + str(job))
+            print(os.path.abspath(args.output_dir) + "/ITER_" + str(job))
 
         print(f"===End OF OUTPUT FOR JOBS===\n")
 
-def run_job(script_path=args.script_path, num_of_jobs=args.jobs, refresh_job_list=int(args.refresh), show_status=args.status):
+def run_job(num_of_jobs=args.jobs, show_status=args.status):
 
-    try:
-        with open(args.script_path, "rt") as slurm_file:
-            lines = slurm_file.readlines()
-            for line in lines:
-                if "#SBATCH --job-name=" in line:
-                    job_name = line[ line.find('=') +1 : line.rfind('#') ].strip()
-                elif "#SBATCH --output=" in line:
-                    output_file = line[ line.find('=') +1 : line.rfind('#') ].strip()
-                elif "#SBATCH --error=" in line:
-                    error_file = line[ line.find('=') +1 : line.rfind('#') ].strip()
-        print(f"Output file: {output_file}\n")
-        time.sleep(2)
-
-        result = subprocess.run(["sbatch", args.script_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE,universal_newlines=True)
-        job_id = re.findall(r'\d+', result.stdout)[0]
-
-            
-    except TypeError:
-        print(f"File with path {script_path} not found!")
-        exit
+    result = subprocess.run(["sbatch", args.script_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE,universal_newlines=True)
+    job_id = re.findall(r'\d+', result.stdout)[0]
 
     if show_status:
         print(f"===STATUS of JOB {job_id}===\n")
@@ -110,9 +92,9 @@ def run_job(script_path=args.script_path, num_of_jobs=args.jobs, refresh_job_lis
             try:
                 check_output = subprocess.check_output(f'squeue | grep {job_id}', shell=True, universal_newlines=True)
                 if check_output is not None:
-                    print(f"Job {job_id} is running (refresh: {refresh_job_list} sec intervals):")
+                    print(f"Job {job_id} is running (refresh: {int(args.refresh)} sec intervals):")
                     print(check_output)
-                    time.sleep(refresh_job_list)
+                    time.sleep(int(args.refresh))
                 else:
                     break
             except subprocess.CalledProcessError:
