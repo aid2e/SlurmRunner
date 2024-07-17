@@ -7,7 +7,7 @@ import time
 
 parser = argparse.ArgumentParser(description='SLURM Runner written in Python for PyMOO.')
 parser.add_argument("-s", "--script_path", help="Specify script path to be used for sbatch.")
-parser.add_argument("-t", "--refresh", help="Specify how much time we refresh the SLURM job list.", default=60)
+parser.add_argument("-t", "--refresh", help="Specify how much time we refresh the SLURM job list.", default=30)
 parser.add_argument("-i", "--status", help="Show output of job status.", default=True)
 parser.add_argument("-o", "--output_dir", help="Output directory.", default="./")
 parser.add_argument("-r", "--run", help="Run SLURM job.", default=True)
@@ -19,10 +19,10 @@ parser.add_argument("-wr", "--write_run", help="Write and run a SLURM job.", def
 args = parser.parse_args()
 print(args.script_path)
 
-def run_multiple_jobs(script_path=args.script_path, num_of_jobs=int(args.jobs), output_dir=args.output_dir, refresh_job_list=int(args.refresh), show_status=args.status):
+def run_multiple_jobs(script_path=args.script_path, num_of_jobs=int(args.jobs), custom_output_dir=args.output_dir, refresh_job_list=int(args.refresh), show_status=args.status):
 
     try:
-        with open(args.script_path, "rt") as slurm_file:
+        with open(os.path.abspath(script_path), "rt") as slurm_file:
             lines = slurm_file.readlines()
             for line in lines:
                 if "#SBATCH --job-name=" in line:
@@ -31,25 +31,26 @@ def run_multiple_jobs(script_path=args.script_path, num_of_jobs=int(args.jobs), 
                     output_file = line[ line.find('=') +1 : line.rfind('#') ].strip()
                 elif "#SBATCH --error=" in line:
                     error_file = line[ line.find('=') +1 : line.rfind('#') ].strip()
-
     except TypeError:
-        print(f"File with path {script_path} not found!")
+        print(f"File with path {os.path.abspath(script_path)} not found!")
         exit()
 
-    print(f"Output file: {output_file}\n")
+    print("Output directory set to:", os.path.abspath(custom_output_dir))
+    os.makedirs(os.path.abspath(custom_output_dir),exist_ok=True)
+    print(f"Output file: {os.path.abspath(custom_output_dir)}/{output_file}\n")
+
     time.sleep(2)
     job_id_list = []
     cwd = os.getcwd()
-
     for job in range(num_of_jobs):
-        path = output_dir+"ITER_"+str(job)
+        path = os.path.abspath(custom_output_dir) + "/ITER_" + str(job)
+        print("Creating path:", path)
         os.makedirs(path, exist_ok=True)
         os.chdir(path)
         result = subprocess.run(["sbatch", str(cwd) + '/' + args.script_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE,universal_newlines=True)
         try:
             job_id = re.findall(r'\d+', result.stdout)[0]
             job_id_list.append(job_id)
-
         except IndexError:
             print("Cannot find job id!")
         os.chdir(cwd)
@@ -76,24 +77,7 @@ def run_multiple_jobs(script_path=args.script_path, num_of_jobs=int(args.jobs), 
         print(f"===OUTPUT OF JOBS===\n")
         print("Output is available under these directories:")
         for job in range(num_of_jobs):
-            print(output_dir+"ITER_"+str(job))
-
-        # if os.path.exists(error_file) and os.stat(error_file).st_size != 0:
-        #     print("===ERROR===")
-        #     print(f"Encountered error when running jobs!")
-            
-        #     time.sleep(5)
-
-        #     with open(error_file, "rt") as text_file:
-        #         print("Error received from:", error_file)
-        #         lines = text_file.readlines()
-        #         for line in lines:
-        #             print(line)
-
-        # with open(output_file, "rt") as text_file:
-        #     lines = text_file.readlines()
-        #     for line in lines:
-        #         print(line)
+            print(os.path.abspath(custom_output_dir) + "/ITER_" + str(job))
 
         print(f"===End OF OUTPUT FOR JOBS===\n")
 
@@ -159,7 +143,6 @@ def run_job(script_path=args.script_path, num_of_jobs=args.jobs, refresh_job_lis
                 print(line)
 
         print(f"===End OF OUTPUT FOR JOB {job_id}===\n")
-
 
 def write_job(config=args.config):
     print("write_job")
