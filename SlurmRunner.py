@@ -14,7 +14,7 @@ parser.add_argument("-t", "--refresh", help="Specify how much time we refresh th
 parser.add_argument("-o", "--output_dir", help="Output directory.", default="./")
 parser.add_argument("-r", "--run", help="Run SLURM job.", default=True)
 parser.add_argument("-j", "--jobs", help="Run multiple SLURM jobs.", default=1)
-parser.add_argument("-wt", "--wall_time", help="Force running jobs to stop at a specified time formatted in HH:MM:SS.", default="")
+parser.add_argument("-wt", "--wall_time", help="Any jobs outside of this time will be killed.", default="")
 
 args = parser.parse_args()
 
@@ -49,6 +49,8 @@ def create_folder_and_change_dir_for_job(job):
 def convert_time_limit_to_sec(time_limit):
     if args.wall_time:
         hh, mm, ss = args.wall_time.split(':')
+    elif args.expected_ttf:
+        hh, mm, ss = args.expected_ttf.split(':')
     else:
         hh, mm, ss = time_limit.split(':')
     time_limit_int = int(hh) * 3600 + int(mm) * 60 + int(ss)
@@ -89,7 +91,7 @@ def poll_jobs(time_limit, job_id_list):
         sys.stdout.flush()
         time.sleep(5)
         os.system('reset')  # We have to reset otherwise frame buffer is contaminated
-        print(f"Current running time has exceeded wall-time limit for jobs!")
+        if args.wall_time: print(f"Current running time has exceeded wall-time limit ({args.wall_time}) for jobs!")
         print(f"Cancelling SLURM jobs!")
         kill_jobs(job_id_list)
         time.sleep(1)
@@ -106,7 +108,6 @@ def kill_jobs(job_id_list):
                 print(f"CANCELLED JOB WITH ID {failed_job_id}")
             except AttributeError:
                 print(f"Cannot find job ID!")
-        #subprocess.run(f"scancel --job {','.join(map(str, failed_job_id_list)) }", shell=True, universal_newlines=True)
         subprocess.run(
             ["scancel", f"{','.join(map(str, failed_job_id_list))}"], 
             stdin=subprocess.PIPE, 
@@ -114,18 +115,31 @@ def kill_jobs(job_id_list):
             stderr=sys.stderr, 
             universal_newlines=True
                        )
+        prompt_resubmit_jobs(failed_job_id_list)
     except subprocess.CalledProcessError:
         print(f"Jobs finished or killed\n")
         time.sleep(10)
 
+def prompt_resubmit_jobs(failed_job_id_list):
+    time_limit = read_slurm_script()
+    response = input("Do you want to resubmit the failed jobs? (Y/N): ")
+    if response.lower() == 'y':
+        print("Resubmitting Jobs...")
+        job_id_list = create_jobs(len(failed_job_id_list))
+        poll_jobs(time_limit, job_id_list)
+    elif response.lower() == 'n':
+        print_job_output()
+    else:
+        print("Invalid choice. Please enter Y or N.")
+
 def print_job_output(num_of_jobs=int(args.jobs)):
     print(f"===OUTPUT OF JOBS===\n")
-    print("Output is available under these directories:")
+    print("Output (with logs) is available under these directories:")
     for job in range(num_of_jobs):
         print(os.path.abspath(args.output_dir) + "/ITER_" + str(job))
     print(f"\n===END OF OUTPUT FOR JOBS===\n")
 
-def run_jobs(num_of_jobs=int(args.jobs)):
+def run_jobs():
     try:
         job_name, output_file, error_file, time_limit = read_slurm_script()
         print_paths_and_make_output_dir()
