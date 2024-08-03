@@ -12,7 +12,6 @@ parser = argparse.ArgumentParser(description='SLURM Runner written in Python for
 parser.add_argument("-s", "--script_path", help="Specify script path to be used for sbatch.")
 parser.add_argument("-t", "--refresh", help="Specify how much time we refresh the SLURM job list.", default=1)
 parser.add_argument("-o", "--output_dir", help="Output directory.", default="./")
-parser.add_argument("-r", "--run", help="Run SLURM job.", default=True)
 parser.add_argument("-j", "--jobs", help="Run multiple SLURM jobs.", default=1)
 parser.add_argument("-wt", "--wall_time", help="Any jobs outside of this time will be killed.", default="")
 
@@ -49,8 +48,6 @@ def create_folder_and_change_dir_for_job(job):
 def convert_time_limit_to_sec(time_limit):
     if args.wall_time:
         hh, mm, ss = args.wall_time.split(':')
-    elif args.expected_ttf:
-        hh, mm, ss = args.expected_ttf.split(':')
     else:
         hh, mm, ss = time_limit.split(':')
     time_limit_int = int(hh) * 3600 + int(mm) * 60 + int(ss)
@@ -89,12 +86,11 @@ def poll_jobs(time_limit, job_id_list):
         print(f"Jobs Completed\n")
     except subprocess.TimeoutExpired:
         sys.stdout.flush()
-        time.sleep(5)
         os.system('reset')  # We have to reset otherwise frame buffer is contaminated
         if args.wall_time: print(f"Current running time has exceeded wall-time limit ({args.wall_time}) for jobs!")
         print(f"Cancelling SLURM jobs!")
-        kill_jobs(job_id_list)
-        time.sleep(1)
+        prompt_resubmit_jobs(kill_jobs(job_id_list))
+        time.sleep(3)
 
 def kill_jobs(job_id_list):
     try:
@@ -115,20 +111,19 @@ def kill_jobs(job_id_list):
             stderr=sys.stderr, 
             universal_newlines=True
                        )
-        prompt_resubmit_jobs(failed_job_id_list)
+        return failed_job_id_list
     except subprocess.CalledProcessError:
-        print(f"Jobs finished or killed\n")
-        time.sleep(10)
+        time.sleep(5)
 
 def prompt_resubmit_jobs(failed_job_id_list):
     time_limit = read_slurm_script()
-    response = input("Do you want to resubmit the failed jobs? (Y/N): ")
-    if response.lower() == 'y':
+    response = input("Do you want to resubmit the failed jobs? (Y/n): ")
+    if response.lower() in ['y', '']:
         print("Resubmitting Jobs...")
         job_id_list = create_jobs(len(failed_job_id_list))
         poll_jobs(time_limit, job_id_list)
     elif response.lower() == 'n':
-        print_job_output()
+        return
     else:
         print("Invalid choice. Please enter Y or N.")
 
@@ -143,13 +138,14 @@ def run_jobs():
     try:
         job_name, output_file, error_file, time_limit = read_slurm_script()
         print_paths_and_make_output_dir()
-
+        time.sleep(5)
         job_id_list = create_jobs()
         poll_jobs(time_limit, job_id_list)
 
         print_job_output()
     except KeyboardInterrupt:
         kill_jobs(job_id_list)
+        print(f"\nProgram exited\n")
 
 if __name__ == "__main__":
     run_jobs()
