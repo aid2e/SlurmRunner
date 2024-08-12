@@ -9,11 +9,11 @@ import datetime
 import io
 
 parser = argparse.ArgumentParser(description='SLURM Runner written in Python for PyMOO.')
-parser.add_argument("-s", "--script_path", help="Specify script path to be used for sbatch.")
-parser.add_argument("-t", "--refresh", help="Specify how much time we refresh the SLURM job list.", default=1)
-parser.add_argument("-o", "--output_dir", help="Output directory.", default="./")
-parser.add_argument("-j", "--jobs", help="Run multiple SLURM jobs.", default=1)
-parser.add_argument("-wt", "--wall_time", help="Any jobs outside of this time will be killed.", default="")
+parser.add_argument("-s", "--script_path", help="specify script path to be used for sbatch.")
+parser.add_argument("-t", "--refresh", help="specify how much time we refresh the SLURM job list.", default=1)
+parser.add_argument("-o", "--output_dir", help="output directory to send SLURM job output.", default="./")
+parser.add_argument("-j", "--jobs", help="run multiple SLURM jobs.", default=1)
+parser.add_argument("-wt", "--wall_time", help="overwrites time limit setting; jobs still running will be killed.", default="")
 
 args = parser.parse_args()
 
@@ -23,16 +23,23 @@ def read_slurm_script():
             lines = slurm_file.readlines()
             for line in lines:
                 if "#SBATCH --job-name=" in line:
-                    job_name = line[ line.rfind('/') +1 : line.rfind('#') ].strip()
+                    job_name = line.split('#')[1][line.rfind('='): len(line)].strip()
                 elif "#SBATCH --output=" in line:
-                    output_file = line[ line.find('=') +1 : line.rfind('#') ].strip()
+                    output_file = line.split('#')[1][line.rfind('='): len(line)].strip()
                 elif "#SBATCH --error=" in line:
-                    error_file = line[ line.find('=') +1 : line.rfind('#') ].strip()
+                    error_file = line.split('#')[1][line.rfind('='): len(line)].strip()
                 elif "#SBATCH --time=" in line:
-                    time_limit = line[ line.find('=') +1 : line.rfind('#') ].strip()
+                    time_limit = line.split('#')[1][line.rfind('='): len(line)].strip()
+        print(f"--> Job Name: {output_file}")
+        print(f"--> Output File: {output_file}")
+        print(f"--> Error File: {error_file}")
+        print(f"--> Time: {time_limit}")
         return job_name, output_file, error_file, time_limit
     except TypeError:
         print(f"File with path {os.path.abspath(args.script_path)} not found!")
+        exit()
+    except IndexError:
+        print(f"Error extracting Slurm information!")
         exit()
 
 def print_paths_and_make_output_dir():
@@ -84,7 +91,7 @@ def poll_jobs(time_limit, job_id_list):
                 time.sleep(1)
     except AttributeError:  # Even though this is an error, this will tell us when there are no more jobs for $USER
         print(f"Jobs Completed\n")
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired: # Jobs are still running after the wall-time limit
         sys.stdout.flush()
         os.system('reset')  # We have to reset otherwise frame buffer is contaminated
         if args.wall_time: print(f"Current running time has exceeded wall-time limit ({args.wall_time}) for jobs!")
@@ -136,15 +143,17 @@ def print_job_output(num_of_jobs=int(args.jobs)):
 
 def run_jobs():
     try:
+        job_id_list = []
         job_name, output_file, error_file, time_limit = read_slurm_script()
         print_paths_and_make_output_dir()
         time.sleep(5)
         job_id_list = create_jobs()
         poll_jobs(time_limit, job_id_list)
-
         print_job_output()
+
     except KeyboardInterrupt:
-        kill_jobs(job_id_list)
+        if job_id_list is not None:
+            kill_jobs(job_id_list)
         print(f"\nProgram exited\n")
 
 if __name__ == "__main__":
