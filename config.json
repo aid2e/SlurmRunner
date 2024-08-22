@@ -1,0 +1,24 @@
+{
+    "container" : {
+        "name" : "EPIC_CONTAINER",
+        "path" : "/path/to/eic-shell"
+    },
+    "input" : {
+        "CodeDir" : "/path/to/SCRIPTS/directory"
+    },
+    "output" : {
+        "outDir" : "/path/to/OUTPUT/directory",
+        "logDir" : "/path/to/OUTPUT/directory/logs"
+    },
+    "epic" : {
+        "epicDir" : "/path/to/epic_install/directory"
+    },
+    "eicrecon" : {
+        "eicreconDir" : "/path/to/eicrecon_install/directory"
+    },
+    "simulation": {
+        "name" : "default_config_interlayer_32cm",
+        "nEvents" : 2000,
+        "nJobs" : 250
+    }
+}

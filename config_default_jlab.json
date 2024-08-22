@@ -1,0 +1,26 @@
+{
+    "container" : {
+        "name" : "EPIC_CONTAINER",
+        "path" : "/volatile/halld/home/ksuresh/ePIC-EIC-2024/eic/eic-shell"
+    },
+    "input" : {
+        "CodeDir" : "/volatile/halld/home/ksuresh/ePIC-EIC-2024/B0_FarForward/HPC_SUBMISSION/SCRIPTS",
+        "submit_template" : "SUBMIT_SLURM.sh",
+        "run_sim_template" : "run_sim.sh"
+    },
+    "output" : {
+        "outDir" : "/volatile/halld/home/ksuresh/ePIC-EIC-2024/ProductionSimulations/DefaultConfig",
+        "logDir" : "/volatile/halld/home/ksuresh/ePIC-EIC-2024/ProductionSimulations/DefaultConfig/logs"
+    },
+    "epic" : {
+        "epicDir" : "/volatile/halld/home/ksuresh/ePIC-EIC-2024/epic_install"
+    },
+    "eicrecon" : {
+        "eicreconDir" : "/volatile/halld/home/ksuresh/ePIC-EIC-2024/EICrecon_install"
+    },
+    "simulation": {
+        "name" : "epic_craterlake_18x275",
+        "nEvents" : 2000,
+        "nJobs" : 250
+    }
+}
